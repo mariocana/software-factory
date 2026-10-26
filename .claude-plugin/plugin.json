@@ -1,7 +1,7 @@
 {
   "name": "software-factory",
   "version": "0.2.0",
-  "description": "A small agent software factory for any repository: a feature request goes through spec writer, builder, parallel reviewers (code, security, UX, UI) and an approver, each a Claude Code subagent, in its own git worktree. State lives in Markdown files; a local dashboard shows every task.",
+  "description": "A small agent software factory for any repository: an analyst turns a product brief into a dependency-ordered backlog, and each feature goes through spec writer, builder, parallel reviewers (code, security, UX, UI) and an approver, each a Claude Code subagent, in its own git worktree. State lives in Markdown files; a local dashboard shows every task.",
   "author": {
     "name": "mariocana"
   },
