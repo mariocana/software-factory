@@ -1,0 +1,14 @@
+{
+  "name": "software-factory",
+  "description": "Local marketplace for the software-factory plugin.",
+  "owner": {
+    "name": "mariocana"
+  },
+  "plugins": [
+    {
+      "name": "software-factory",
+      "description": "Agent software factory: spec, build, review, approve, merge.",
+      "source": "./"
+    }
+  ]
+}
