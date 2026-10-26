@@ -53,6 +53,28 @@ and the `setup/test/lint/run` commands. The body lists what always goes to a hum
 migrations, new dependencies...) and project notes. Every agent reads it, together with the
 project's `CLAUDE.md`.
 
+## Optional skills
+
+List them in the policy (`skills: impeccable, ponytail`) after installing them in the project:
+
+```bash
+claude plugin marketplace add pbakaus/impeccable --scope project
+claude plugin install impeccable@impeccable --scope project
+claude plugin marketplace add DietrichGebert/ponytail --scope project
+claude plugin install ponytail@ponytail --scope project
+```
+
+| Skill | Used by | How |
+|---|---|---|
+| [Impeccable](https://github.com/pbakaus/impeccable) | analyst, spec-writer, builder, reviewer-ui, reviewer-ux | PRODUCT.md and DESIGN.md as design context, craft and harden rules while building, its deterministic detector (`detect --json`) and audit/critique checks in review |
+| [Ponytail](https://github.com/DietrichGebert/ponytail) | builder, reviewer-code | smallest complete change while building; ponytail-review's checks in code review |
+
+`scripts/factory.py skills` resolves each listed skill to its installed folder (`claude plugin list
+--json`) and the orchestrator passes those paths to every agent. `/factory init` also scopes
+ponytail's subagent hook to the builder and code reviewer with `PONYTAIL_SUBAGENT_MATCHER`.
+Both plugins add their own hooks to every session in the project: Impeccable checks UI edits,
+Ponytail sets its mode and shows its band.
+
 ## Files
 
 ```

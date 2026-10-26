@@ -13,6 +13,7 @@ allowed-tools:
   - Bash(git *)
   - Bash(gh *)
   - Bash(python3 *)
+  - Bash(claude plugin list *)
 ---
 
 # Software factory
@@ -28,6 +29,7 @@ Paths you pass to subagents are always absolute:
 - `POLICY` = `REPO/.claude/factory.md`, settings via `F policy`
 - `CONTRACT` = `${CLAUDE_SKILL_DIR}/reviewer-contract.md`
 - `PLAN_DIR` = `REPO/.factory/plan`
+- `SKILLS` = the output of `F skills` without its `missing` key: optional skills from the policy's `skills:` line, mapped to their installed folders. **Pass `SKILLS` in every subagent dispatch**, as given (an empty `{}` means none); each agent knows what to do with each skill.
 
 ## Dispatch on the arguments
 
@@ -50,19 +52,20 @@ Paths you pass to subagents are always absolute:
 
 1. `F init`. It creates `.factory/`, excludes it from git and copies the policy template to `.claude/factory.md` if missing.
 2. If the policy was just created, fill its frontmatter from the project: `base_branch` (`git symbolic-ref --short refs/remotes/origin/HEAD` without `origin/`, else the current branch), and `setup_command`, `test_command`, `lint_command`, `run_command` from `package.json` scripts, `pyproject.toml`, `Makefile`, `Cargo.toml`, `go.mod` or similar. Set `merge_mode: pr` only if `origin` is on GitHub and `gh` is available, otherwise `local`. Leave unknown commands empty. Adapt "Always escalate" to what exists in the repo (no billing code → drop that line).
-3. Show the user the settings in a short list and tell them to review and commit `.claude/factory.md`. If the repo has no `CLAUDE.md`, suggest running `/init`: every factory agent reads it.
+3. Optional skills: run `claude plugin list --json` in `REPO`. If `impeccable` or `ponytail` is enabled for this project, list it in `skills:` (comma separated). If `ponytail` is listed, add `"PONYTAIL_SUBAGENT_MATCHER": "builder|reviewer-code"` under `env` in `REPO/.claude/settings.json` (create or merge, keep everything else), so ponytail's subagent hook shapes only those two agents and not the analyst or the other reviewers.
+4. Show the user the settings in a short list and tell them to review and commit `.claude/factory.md`. If the repo has no `CLAUDE.md`, suggest running `/init`: every factory agent reads it.
 
 ## Plan
 
 For a product brief: an MVP, a new product area, anything bigger than one feature.
 
-1. If `F policy` fails, run **Init** first (an empty repo is fine; F01 will fill the commands later). The repo needs at least one commit; if it has none, ask the user before making an empty one.
+1. If `F policy` fails, run **Init** first (an empty repo is fine; F01 will fill the commands later). Run `F skills` as in Pipeline step 0. The repo needs at least one commit; if it has none, ask the user before making an empty one.
 2. Write the brief verbatim to `PLAN_DIR/brief.md`. If `PLAN_DIR/proposed-backlog.md` or a non-empty backlog already exists, ask the user whether to replace the plan or use **Plan update** instead.
 3. **Questions.** Dispatch `software-factory:analyst` with `MODE=questions`, `REPO`, `PLAN_DIR`, `POLICY`. Read `PLAN_DIR/questions.md`. Unless it is `none`, ask the user with `AskUserQuestion` (up to 4 per call; each question's options are its default first, marked "(Recommended)", then its alternatives). Write every question with the answer to `PLAN_DIR/answers.md`.
 4. **Plan.** Dispatch `software-factory:analyst` with `MODE=plan` and the same inputs.
 5. **Review with the user.** Show the scope from `docs/product.md` (MVP scope and Out of scope, 1 line each), the stack, and the proposed backlog as a list with deps. Ask with `AskUserQuestion`: approve, change (they write what), or cancel.
    - change → append their text to `PLAN_DIR/feedback.md`, dispatch the analyst with `MODE=update` and `CURRENT_BACKLOG` = the current `.factory/backlog.md` content, and repeat this step.
-   - approve → `F plan-apply`, then `git -C REPO add docs/product.md` plus `.claude/factory.md` if untracked, and commit only those paths: `git -C REPO commit -m "factory: product plan" -- docs/product.md [.claude/factory.md]`. Worktrees branch from the base branch, so the builder only sees what is committed.
+   - approve → `F plan-apply`, then commit only the plan files: `docs/product.md`, `PRODUCT.md` if the analyst wrote it, and `.claude/factory.md` and `.claude/settings.json` if untracked or changed by Init: `git -C REPO add <those>` and `git -C REPO commit -m "factory: product plan" -- <those>`. Worktrees branch from the base branch, so the builder only sees what is committed.
 6. Report: number of items, which are ready now (no deps), and that `/factory next` starts the first one; independent items can run in parallel from separate sessions.
 
 ## Plan update
@@ -71,7 +74,7 @@ After feedback on built features, or a change of scope. Append the user's text t
 
 ## Pipeline (one task)
 
-**0. Preflight.** If `F policy` fails, run **Init** first. Read the settings once. Check `git -C REPO rev-parse --verify <base_branch>`. The main checkout does not need to be clean: all work happens in the worktree.
+**0. Preflight.** If `F policy` fails, run **Init** first. Read the settings once and run `F skills`; if it reports `missing`, tell the user once which listed skills are not installed in this project (install with `claude plugin install <name>@<name> --scope project`) and continue without them. Check `git -C REPO rev-parse --verify <base_branch>`. The main checkout does not need to be clean: all work happens in the worktree.
 
 **1. Spec.** `F set <id> stage=spec`. Dispatch `software-factory:spec-writer` with `REPO`, `TASK_DIR`, `POLICY` and `REQUEST` (the content of `TASK_DIR/request.md`; for a planned item it is the analyst's item card, and `docs/product.md` is context). Afterwards read `spec.md` frontmatter: `F set <id> title="<title>" touches_ui=<…> risk=<…>`, `F log <id> "spec written"`.
 

@@ -53,3 +53,9 @@ risk: low | medium | high       # high: data migrations, auth, money, deleting d
 ```
 
 Rules: no code edits, no commits, no files other than `spec.md`. Acceptance criteria must be verifiable by reading the diff or running a command; "works well" is not a criterion. Reply to the orchestrator with one line: the title, `touches_ui`, `risk`.
+
+## Optional skills
+
+`SKILLS` (from the orchestrator) maps enabled skill names to their folders; an absent name means that skill is off. Paths below like `<impeccable>` mean that folder.
+
+- **impeccable**, when `touches_ui: true`: read `REPO/PRODUCT.md` and `REPO/DESIGN.md` if present, and `<impeccable>/reference/shape.md`. Add a `## UX` section to the spec: the surface mode (Persuade, Operate, Read or Experience, as the impeccable SKILL.md defines them), the states to design (empty, loading, error, success), and which existing components and tokens to reuse.

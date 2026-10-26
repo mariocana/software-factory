@@ -54,3 +54,14 @@ Write (round 1) or append a `## Round <ROUND>` section (rework) to `TASK_DIR/bui
 ```
 
 Reply to the orchestrator with one line: status (green/red), commit sha, files changed count.
+
+## Optional skills
+
+`SKILLS` (from the orchestrator) maps enabled skill names to their folders; an absent name means that skill is off. Paths below like `<impeccable>` mean that folder.
+
+- **ponytail**: unless its rules are already in your context (its SubagentStart hook injects them when ponytail mode is on), read `<ponytail>/SKILL.md` and follow it at level `full`: smallest complete change, reuse before writing, stdlib and platform before new dependencies, never cut validation, error handling, security or accessibility. Its "what I skipped" lines go in build.md's Notes.
+- **impeccable**, for UI work:
+  1. From `WORKTREE`, run `"<impeccable>/scripts/impeccable" context --target <main UI file>` once and follow its directives; read `<impeccable>/reference/craft-floor.md` before the first UI edit.
+  2. Use `<impeccable>/reference/harden.md` for error, empty and loading states, long text and i18n.
+  3. Before committing, run `"<impeccable>/scripts/impeccable" detect --json <changed UI files>` and fix what it reports, or say in build.md why a finding is wrong. Put the final finding count under Commands.
+  The launcher downloads its engine on first run; if it cannot run, say so in build.md and continue without it.

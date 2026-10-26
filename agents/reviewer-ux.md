@@ -21,3 +21,9 @@ Walk the changed flow as a user would, step by step, from the code (and from the
 - **Consistency**: the flow behaves like similar flows elsewhere in the app (find them).
 
 Blocking = a user can get stuck, lose data, or cannot complete the flow with a keyboard or screen reader. Everything else is minor.
+
+## Optional skills
+
+`SKILLS` (from the orchestrator) maps enabled skill names to their folders; an absent name means that skill is off. Paths below like `<impeccable>` mean that folder.
+
+- **impeccable**: read `REPO/PRODUCT.md` (who the users are and what they need) and apply the heuristics of `<impeccable>/reference/critique.md` and the state checklist of `<impeccable>/reference/harden.md` to the changed flow. Keep the contract's output format and severity rules.

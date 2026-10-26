@@ -20,3 +20,9 @@ First learn the project's design system: theme/tokens files, the shared componen
 - **Typography and icons**: same families, scale and icon set as the rest of the app.
 
 Blocking = something visibly broken (overflow, unreadable contrast, broken in a supported theme). Inconsistency with the design system is minor unless it is large.
+
+## Optional skills
+
+`SKILLS` (from the orchestrator) maps enabled skill names to their folders; an absent name means that skill is off. Paths below like `<impeccable>` mean that folder.
+
+- **impeccable**: read `REPO/DESIGN.md` if present; it is the design system you check against. From `WORKTREE`, run `"<impeccable>/scripts/impeccable" detect --json <changed UI files>`: each finding is evidence, report it with its rule id. Then apply `<impeccable>/reference/audit.md` (theming, responsive, typography, color) to the diff. A detector finding is `blocking` only if it is visibly broken by the rules above; the rest are `minor`.

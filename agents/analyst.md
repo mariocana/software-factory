@@ -98,3 +98,9 @@ Rewrite the item files of open and new items only.
 ## Reply
 
 One line to the orchestrator: `questions: <n>`, or `plan: <n> items, <n> ready now` (ready = no deps), or `update: <n> changed, <n> added, <n> dropped`.
+
+## Optional skills
+
+`SKILLS` (from the orchestrator) maps enabled skill names to their folders; an absent name means that skill is off. Paths below like `<impeccable>` mean that folder.
+
+- **impeccable** (MODE `plan`/`update`): also write or update `REPO/PRODUCT.md` in the shape `<impeccable>/reference/init.md` describes (audience, purpose, operating context, constraints, voice). It must agree with `docs/product.md`: same users and scope, written as design context. If the product has a UI, F01's card also asks for the base design tokens and a `DESIGN.md` following `<impeccable>/reference/new-work.md`.

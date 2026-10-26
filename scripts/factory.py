@@ -115,6 +115,45 @@ def cmd_policy(args):
     print(json.dumps(data if not args.key else data.get(args.key, "")))
 
 
+# skill name in the policy -> (plugin, skill folders under the plugin's skills/)
+KNOWN_SKILLS = {
+    "impeccable": ("impeccable", ["impeccable"]),
+    "ponytail": ("ponytail", ["ponytail", "ponytail-review"]),
+}
+
+
+def cmd_skills(args):
+    """Resolve the policy's `skills:` to the installed skill folders agents should read."""
+    root = repo_root()
+    data, _ = read_front(root / ".claude" / "factory.md")
+    wanted = [x.strip() for x in data.get("skills", "").split(",") if x.strip()]
+    if not wanted:
+        print(json.dumps({}))
+        return
+    try:
+        out = subprocess.run(["claude", "plugin", "list", "--json"], cwd=root,
+                             capture_output=True, text=True, timeout=60).stdout
+        listed = json.loads(out)
+        listed = listed if isinstance(listed, list) else listed.get("plugins", [])
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        listed = []
+    paths = {p["id"].split("@")[0]: Path(p["installPath"]) for p in listed
+             if p.get("enabled") and p.get("installPath")
+             and (p.get("scope") != "project" or p.get("projectPath") == str(root))}
+    result, missing = {}, []
+    for name in wanted:
+        plugin, folders = KNOWN_SKILLS.get(name, (name, [name]))
+        base = paths.get(plugin)
+        found = [f for f in folders if base and (base / "skills" / f / "SKILL.md").exists()]
+        if not found:
+            missing.append(name)
+        for f in found:
+            result[f] = str(base / "skills" / f)
+    if missing:
+        result["missing"] = missing
+    print(json.dumps(result))
+
+
 def new_task(title, request):
     tasks = factory_dir() / "tasks"
     tasks.mkdir(parents=True, exist_ok=True)
@@ -375,6 +414,7 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init").set_defaults(fn=cmd_init)
     s = sub.add_parser("policy"); s.add_argument("key", nargs="?"); s.set_defaults(fn=cmd_policy)
+    sub.add_parser("skills").set_defaults(fn=cmd_skills)
     s = sub.add_parser("new"); s.add_argument("title"); s.add_argument("--request"); s.set_defaults(fn=cmd_new)
     s = sub.add_parser("set"); s.add_argument("id"); s.add_argument("pairs", nargs="+"); s.set_defaults(fn=cmd_set)
     s = sub.add_parser("log"); s.add_argument("id"); s.add_argument("message"); s.set_defaults(fn=cmd_log)
