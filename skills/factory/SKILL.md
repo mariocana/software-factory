@@ -1,14 +1,15 @@
 ---
 name: factory
-description: "Software factory orchestrator. Runs a feature through spec-writer, builder, parallel reviewers (code, security, UX, UI) and approver subagents in its own git worktree, then merges or escalates to a human. Subcommands: init, <feature request>, next, backlog <item>, status, approve <id>, rework <id> <notes>, reject <id>, dashboard. Use only when the user invokes /factory or explicitly asks to run something through the software factory."
-argument-hint: "init | <feature request> | next | backlog <item> | status | approve <id> | rework <id> <notes> | reject <id> | dashboard"
+description: "Software factory orchestrator. Plans a product brief into a backlog with an analyst, and runs each feature through spec-writer, builder, parallel reviewers (code, security, UX, UI) and approver subagents in its own git worktree, then merges or escalates to a human. Subcommands: init, plan <brief>, plan update <feedback>, <feature request>, next, backlog <item>, status, approve <id>, rework <id> <notes>, reject <id>, dashboard. Use only when the user invokes /factory or explicitly asks to run something through the software factory."
+argument-hint: "init | plan <brief> | plan update <feedback> | <feature request> | next | backlog <item> | status | approve <id> | rework <id> <notes> | reject <id> | dashboard"
 allowed-tools:
   - Read
   - Write
   - Edit
   - Glob
   - Grep
-  - Agent(software-factory:spec-writer, software-factory:builder, software-factory:reviewer-code, software-factory:reviewer-security, software-factory:reviewer-ux, software-factory:reviewer-ui, software-factory:approver)
+  - AskUserQuestion
+  - Agent(software-factory:analyst, software-factory:spec-writer, software-factory:builder, software-factory:reviewer-code, software-factory:reviewer-security, software-factory:reviewer-ux, software-factory:reviewer-ui, software-factory:approver)
   - Bash(git *)
   - Bash(gh *)
   - Bash(python3 *)
@@ -26,6 +27,7 @@ Paths you pass to subagents are always absolute:
 - `WORKTREE` = `REPO/.factory/worktrees/<id>`, `BRANCH` = `factory/<id>`
 - `POLICY` = `REPO/.claude/factory.md`, settings via `F policy`
 - `CONTRACT` = `${CLAUDE_SKILL_DIR}/reviewer-contract.md`
+- `PLAN_DIR` = `REPO/.factory/plan`
 
 ## Dispatch on the arguments
 
@@ -34,8 +36,10 @@ Paths you pass to subagents are always absolute:
 | `init` | **Init** |
 | empty | show `F list` and the subcommands |
 | `status` | **Status** |
-| `next` | `F next`; if it returns an id, run **Pipeline** for it; otherwise say the backlog is empty |
-| `backlog <item>` | `F backlog-add "<item>"`, confirm in one line |
+| `plan <brief>` | **Plan** |
+| `plan update <feedback>` | **Plan update** |
+| `next` | `F next`; if it returns an `id`, run **Pipeline** for it; if it returns `blocked`, list what each item waits on (items in progress elsewhere count as not done); if `blocked` is empty, say the backlog is empty |
+| `backlog <item>` | `F backlog-add "<item>"` (gets an `M` id), confirm in one line |
 | `approve <id>` | **Approve** |
 | `rework <id> <notes>` | **Rework** |
 | `reject <id> [reason]` | **Reject** |
@@ -48,11 +52,28 @@ Paths you pass to subagents are always absolute:
 2. If the policy was just created, fill its frontmatter from the project: `base_branch` (`git symbolic-ref --short refs/remotes/origin/HEAD` without `origin/`, else the current branch), and `setup_command`, `test_command`, `lint_command`, `run_command` from `package.json` scripts, `pyproject.toml`, `Makefile`, `Cargo.toml`, `go.mod` or similar. Set `merge_mode: pr` only if `origin` is on GitHub and `gh` is available, otherwise `local`. Leave unknown commands empty. Adapt "Always escalate" to what exists in the repo (no billing code → drop that line).
 3. Show the user the settings in a short list and tell them to review and commit `.claude/factory.md`. If the repo has no `CLAUDE.md`, suggest running `/init`: every factory agent reads it.
 
+## Plan
+
+For a product brief: an MVP, a new product area, anything bigger than one feature.
+
+1. If `F policy` fails, run **Init** first (an empty repo is fine; F01 will fill the commands later). The repo needs at least one commit; if it has none, ask the user before making an empty one.
+2. Write the brief verbatim to `PLAN_DIR/brief.md`. If `PLAN_DIR/proposed-backlog.md` or a non-empty backlog already exists, ask the user whether to replace the plan or use **Plan update** instead.
+3. **Questions.** Dispatch `software-factory:analyst` with `MODE=questions`, `REPO`, `PLAN_DIR`, `POLICY`. Read `PLAN_DIR/questions.md`. Unless it is `none`, ask the user with `AskUserQuestion` (up to 4 per call; each question's options are its default first, marked "(Recommended)", then its alternatives). Write every question with the answer to `PLAN_DIR/answers.md`.
+4. **Plan.** Dispatch `software-factory:analyst` with `MODE=plan` and the same inputs.
+5. **Review with the user.** Show the scope from `docs/product.md` (MVP scope and Out of scope, 1 line each), the stack, and the proposed backlog as a list with deps. Ask with `AskUserQuestion`: approve, change (they write what), or cancel.
+   - change → append their text to `PLAN_DIR/feedback.md`, dispatch the analyst with `MODE=update` and `CURRENT_BACKLOG` = the current `.factory/backlog.md` content, and repeat this step.
+   - approve → `F plan-apply`, then `git -C REPO add docs/product.md` plus `.claude/factory.md` if untracked, and commit only those paths: `git -C REPO commit -m "factory: product plan" -- docs/product.md [.claude/factory.md]`. Worktrees branch from the base branch, so the builder only sees what is committed.
+6. Report: number of items, which are ready now (no deps), and that `/factory next` starts the first one; independent items can run in parallel from separate sessions.
+
+## Plan update
+
+After feedback on built features, or a change of scope. Append the user's text to `PLAN_DIR/feedback.md`, dispatch `software-factory:analyst` with `MODE=update`, `REPO`, `PLAN_DIR`, `POLICY` and `CURRENT_BACKLOG`, then continue from **Plan** step 5. Items already taken or done never change.
+
 ## Pipeline (one task)
 
 **0. Preflight.** If `F policy` fails, run **Init** first. Read the settings once. Check `git -C REPO rev-parse --verify <base_branch>`. The main checkout does not need to be clean: all work happens in the worktree.
 
-**1. Spec.** `F set <id> stage=spec`. Dispatch `software-factory:spec-writer` with `REPO`, `TASK_DIR`, `POLICY` and `REQUEST` (the content of `TASK_DIR/request.md`). Afterwards read `spec.md` frontmatter: `F set <id> title="<title>" touches_ui=<…> risk=<…>`, `F log <id> "spec written"`.
+**1. Spec.** `F set <id> stage=spec`. Dispatch `software-factory:spec-writer` with `REPO`, `TASK_DIR`, `POLICY` and `REQUEST` (the content of `TASK_DIR/request.md`; for a planned item it is the analyst's item card, and `docs/product.md` is context). Afterwards read `spec.md` frontmatter: `F set <id> title="<title>" touches_ui=<…> risk=<…>`, `F log <id> "spec written"`.
 
 **2. Worktree.** Base ref: `<base_branch>` for `merge_mode: local`; for `pr` run `git -C REPO fetch origin <base_branch>` and use `origin/<base_branch>`. Then `git -C REPO worktree add WORKTREE -b BRANCH <base ref>`. Save it: `F set <id> base=<base ref>`.
 
@@ -75,8 +96,8 @@ Paths you pass to subagents are always absolute:
 - `merge_mode: local`:
   1. `git -C REPO branch --show-current` must equal `base_branch`; if not, `F set <id> stage=needs_human`, log why, and stop. Never switch the user's branch.
   2. `git -C REPO merge --no-ff BRANCH -m "<subject>" -m "<body>"`. Uncommitted user changes in other files are fine; never stash, reset or discard them. If git refuses or conflicts: `git -C REPO merge --abort` when a merge is in progress, `F set <id> stage=needs_human`, log git's message, and tell the user.
-  3. On success: `git -C REPO worktree remove WORKTREE`, `git -C REPO branch -d BRANCH`, `F set <id> stage=merged`, `F backlog-done <id>`.
-- `merge_mode: pr`: `git -C WORKTREE push -u origin BRANCH`, then `gh pr create --repo <owner/repo of origin> --head BRANCH --base <base_branch> --title "<subject>" --body "<body, then one line per reviewer verdict>"`. `F set <id> stage=pr_open pr=<url>`, `F backlog-done <id>`. Keep the worktree until the PR is merged.
+  3. On success: `git -C REPO worktree remove WORKTREE`, `git -C REPO branch -d BRANCH`, `F set <id> stage=merged`, `F backlog-mark <id> x`.
+- `merge_mode: pr`: `git -C WORKTREE push -u origin BRANCH`, then `gh pr create --repo <owner/repo of origin> --head BRANCH --base <base_branch> --title "<subject>" --body "<body, then one line per reviewer verdict>"`. `F set <id> stage=pr_open pr=<url>`, `F backlog-mark <id> x`. Keep the worktree until the PR is merged.
 
 Never push to `base_branch` directly and never force-push.
 
@@ -90,7 +111,7 @@ Task must be in `needs_human` with its worktree present. Write the user's notes 
 
 ## Reject
 
-`F set <id> stage=rejected`, `F log <id> "rejected: <reason>"`. `git -C REPO worktree remove WORKTREE` (without `--force`; if it refuses, tell the user what is uncommitted). Keep the branch, and tell the user `git branch -D factory/<id>` deletes it.
+`F set <id> stage=rejected`, `F log <id> "rejected: <reason>"`, `F backlog-mark <id> -` (items that depend on it stay blocked: suggest `/factory plan update`). `git -C REPO worktree remove WORKTREE` (without `--force`; if it refuses, tell the user what is uncommitted). Keep the branch, and tell the user `git branch -D factory/<id>` deletes it.
 
 ## Status
 

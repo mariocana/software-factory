@@ -2,7 +2,10 @@
 """State and dashboard for the software factory. Standard library only.
 
 All state lives in <repo>/.factory/ (excluded from git via .git/info/exclude):
-    backlog.md                 "- [ ] item" lines; "- [~] item -> <id>" once taken
+    backlog.md                 "- [ ] F03 item (deps: F01) [ui]"; "[~] ... -> <task id>" once taken,
+                               [x] done, [-] dropped
+    plan/                      analyst output: brief, questions, answers, proposed-backlog,
+                               items/<F-id>.md (the request each item's task starts from)
     tasks/<id>/status.md       frontmatter (stage, round, ...) + "## Log"
     tasks/<id>/*.md            spec, build, reviews, decision, notes
     worktrees/<id>/            git worktree of branch factory/<id>
@@ -177,38 +180,100 @@ def cmd_list(args):
         print("no tasks")
 
 
+ITEM_RE = re.compile(r"^- \[(?P<mark>[ ~x-])\] (?:(?P<id>[FM]\d+) )?(?P<text>.*?)(?: -> (?P<task>\S+))?$")
+
+
 def read_backlog():
     path = factory_dir() / "backlog.md"
     return path, (path.read_text() if path.exists() else "# Backlog\n\n").splitlines()
 
 
+def parse_item(line):
+    """'- [ ] F03 Title (deps: F01, F02) [ui] -> task' as a dict, or None."""
+    m = ITEM_RE.match(line)
+    if not m:
+        return None
+    d = m.groupdict()
+    deps = re.search(r"\(deps: ([^)]*)\)", d["text"])
+    d["deps"] = [x.strip() for x in deps.group(1).split(",") if x.strip()] if deps else []
+    d["title"] = re.sub(r"\s*(\((deps|dropped):[^)]*\)|\[ui\])", "", d["text"]).strip()
+    return d
+
+
+def next_free_id(lines, prefix):
+    """F ids come from the analyst's plan, M ids from items added by hand."""
+    nums = [int(i["id"][1:]) for l in lines
+            if (i := parse_item(l)) and i["id"] and i["id"][0] == prefix]
+    return f"{prefix}{max(nums, default=0) + 1:02d}"
+
+
 def cmd_backlog_add(args):
     path, lines = read_backlog()
     path.parent.mkdir(parents=True, exist_ok=True)
-    lines.append(f"- [ ] {args.text.strip()}")
+    lines.append(f"- [ ] {next_free_id(lines, 'M')} {args.text.strip()}")
     path.write_text("\n".join(lines) + "\n")
+    print(lines[-1])
 
 
 def cmd_next(args):
-    """Take the first open backlog item: create its task and mark it taken."""
+    """Take the first open item whose deps are all done: create its task, mark it taken."""
     path, lines = read_backlog()
-    for i, line in enumerate(lines):
-        m = re.match(r"^- \[ \] (.+)$", line)
-        if m:
-            text = m.group(1).strip()
-            task_id = new_task(text[:60], text)
-            lines[i] = f"- [~] {text} -> {task_id}"
-            path.write_text("\n".join(lines) + "\n")
-            print(json.dumps({"id": task_id, "request": text}))
-            return
-    print(json.dumps({}))
+    items = {i["id"]: i for l in lines if (i := parse_item(l)) and i["id"]}
+    blocked = []
+    for n, line in enumerate(lines):
+        item = parse_item(line)
+        if not item or item["mark"] != " ":
+            continue
+        waiting = [d for d in item["deps"] if items.get(d, {}).get("mark") != "x"]
+        if waiting:
+            blocked.append(f"{item['id']} waits on {', '.join(waiting)}")
+            continue
+        card = factory_dir() / "plan" / "items" / f"{item['id']}.md"
+        request = card.read_text() if item["id"] and card.exists() else item["title"]
+        label = f"{item['id']} {item['title']}" if item["id"] else item["title"]
+        task_id = new_task(label[:60], request)
+        lines[n] = f"{line} -> {task_id}".replace("- [ ]", "- [~]", 1)
+        path.write_text("\n".join(lines) + "\n")
+        print(json.dumps({"id": task_id, "item": item["id"], "title": item["title"]}))
+        return
+    print(json.dumps({"blocked": blocked}))
 
 
-def cmd_backlog_done(args):
+def cmd_backlog_mark(args):
+    """Close the backlog item a task came from: x = done, - = dropped."""
     path, lines = read_backlog()
-    path.write_text("\n".join(
-        re.sub(r"^- \[~\]", "- [x]", l) if l.endswith(f"-> {args.id}") else l
-        for l in lines) + "\n")
+    out = []
+    for line in lines:
+        item = parse_item(line)
+        if item and item["task"] == args.id:
+            line = line.replace(f"- [{item['mark']}]", f"- [{args.mark}]", 1)
+        out.append(line)
+    path.write_text("\n".join(out) + "\n")
+
+
+def cmd_plan_apply(args):
+    """Merge plan/proposed-backlog.md into backlog.md; taken or done items never change."""
+    proposed = factory_dir() / "plan" / "proposed-backlog.md"
+    if not proposed.exists():
+        sys.exit("factory: no plan/proposed-backlog.md")
+    path, lines = read_backlog()
+    current = {i["id"]: l for l in lines if (i := parse_item(l)) and i["id"]}
+    out, seen, counts = ["# Backlog", ""], set(), {"kept": 0, "set": 0, "dropped": 0}
+    for line in proposed.read_text().splitlines():
+        item = parse_item(line)
+        if not item or not item["id"]:
+            continue
+        seen.add(item["id"])
+        old = current.get(item["id"])
+        if old and parse_item(old)["mark"] in "~x":
+            out.append(old); counts["kept"] += 1
+        else:
+            out.append(line); counts["dropped" if item["mark"] == "-" else "set"] += 1
+    # items the proposal forgot, and manual lines without an ID, are kept as they were
+    out += [l for l in lines if (i := parse_item(l)) and (not i["id"] or i["id"] not in seen)]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(out) + "\n")
+    print(json.dumps(counts))
 
 
 # ---------------------------------------------------------------- dashboard
@@ -316,7 +381,8 @@ def main():
     s = sub.add_parser("list"); s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_list)
     s = sub.add_parser("backlog-add"); s.add_argument("text"); s.set_defaults(fn=cmd_backlog_add)
     sub.add_parser("next").set_defaults(fn=cmd_next)
-    s = sub.add_parser("backlog-done"); s.add_argument("id"); s.set_defaults(fn=cmd_backlog_done)
+    s = sub.add_parser("backlog-mark"); s.add_argument("id"); s.add_argument("mark", choices=["x", "-"]); s.set_defaults(fn=cmd_backlog_mark)
+    sub.add_parser("plan-apply").set_defaults(fn=cmd_plan_apply)
     s = sub.add_parser("dashboard"); s.add_argument("--port", type=int, default=8765); s.set_defaults(fn=cmd_dashboard)
     args = p.parse_args()
     args.fn(args)

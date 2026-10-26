@@ -5,6 +5,8 @@ You describe a feature; subagents write the spec, build it in a git worktree, re
 and decide whether it merges on its own or waits for you.
 
 ```
+brief ─► analyst (opus) ─► docs/product.md + backlog F01..Fn with deps ─► you approve
+
 request ─► spec-writer ─► builder ─► reviewers (parallel) ─► approver ─► merge | needs_human
   (opus)      (opus)        ▲   code · security · ux · ui        (opus)
                             └──── changes, max N rounds ◄──┘
@@ -29,8 +31,10 @@ Claude Code so the agents load.
 | Command | What it does |
 |---|---|
 | `/factory init` | creates `.factory/`, writes `.claude/factory.md` (policy) filled from the project; review and commit it |
+| `/factory plan <brief>` | analyst asks the open questions, writes `docs/product.md` and a backlog of small vertical slices with dependencies; you approve it |
+| `/factory plan update <feedback>` | re-plan open items; taken and done items never change |
 | `/factory add a copy button to code blocks` | runs a feature through the whole pipeline |
-| `/factory backlog <item>` / `/factory next` | queue items, take the first open one |
+| `/factory backlog <item>` / `/factory next` | queue an item by hand (`M` id); take the first open item whose deps are done |
 | `/factory status` | list tasks and why any wait for you |
 | `/factory approve <id>` | merge a task the approver escalated |
 | `/factory rework <id> <notes>` | one more build/review round with your notes |
@@ -53,7 +57,7 @@ project's `CLAUDE.md`.
 
 ```
 .claude-plugin/plugin.json, marketplace.json
-agents/       spec-writer, builder, reviewer-{code,security,ux,ui}, approver
+agents/       analyst, spec-writer, builder, reviewer-{code,security,ux,ui}, approver
 skills/factory/SKILL.md              orchestrator
 skills/factory/reviewer-contract.md  shared reviewer inputs and output format
 skills/factory/templates/factory.md  policy template
@@ -62,6 +66,9 @@ scripts/factory.py                   state (tasks, backlog) and dashboard, stdli
 
 ## Design choices
 
+- **Analyst and spec-writer are separate.** The analyst decides what to build and in which order
+  (product level, `docs/product.md`); the spec-writer turns one item into files and tests. F01 is
+  the project skeleton and always goes to a human.
 - **The orchestrator decides the flow, agents do one job each.** Subagents cannot start other
   subagents, so the loop lives in the skill.
 - **State changes go through `scripts/factory.py`**, not free-form edits, so the dashboard always
