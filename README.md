@@ -16,6 +16,9 @@ The orchestrator is your Claude Code session running the `/factory` skill. State
 under `.factory/` in your repo, kept out of git through `.git/info/exclude`, so it never makes the
 working tree dirty. A local dashboard shows every task.
 
+New here? Read [docs/getting-started.md](docs/getting-started.md), a walk-through from an empty
+folder to a merged feature. Changes between versions are in [CHANGELOG.md](CHANGELOG.md).
+
 ## Install
 
 ```bash
@@ -91,6 +94,8 @@ skills/factory/SKILL.md              orchestrator
 skills/factory/reviewer-contract.md  shared reviewer inputs and output format
 skills/factory/templates/factory.md  policy template
 scripts/factory.py                   state (tasks, backlog) and dashboard, stdlib only
+docs/getting-started.md              walk-through
+CHANGELOG.md
 ```
 
 ## Design choices
