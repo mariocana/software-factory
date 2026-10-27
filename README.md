@@ -35,6 +35,7 @@ Claude Code so the agents load.
 | `/factory plan update <feedback>` | re-plan open items; taken and done items never change |
 | `/factory add a copy button to code blocks` | runs a feature through the whole pipeline |
 | `/factory backlog <item>` / `/factory next` | queue an item by hand (`M` id); take the first open item whose deps are done |
+| `/factory run [n]` | builds the backlog on its own: takes the next ready item until nothing is ready (or `n` tasks), skipping past escalated tasks to independent items, then reports what merged and what waits for you |
 | `/factory status` | list tasks and why any wait for you |
 | `/factory approve <id>` | merge a task the approver escalated |
 | `/factory rework <id> <notes>` | one more build/review round with your notes |
@@ -44,6 +45,11 @@ Claude Code so the agents load.
 Inside a project the skill may show as `/software-factory:factory`.
 Several tasks can run at once from separate Claude Code sessions: each has its own worktree
 (`.factory/worktrees/<id>`) and branch (`factory/<id>`).
+
+For a simple project: `/factory plan <brief>`, approve the backlog, then `/factory run`. F01 (the
+skeleton) always waits for your approval, and every item depends on it, so the first `run` stops
+there: `/factory approve <F01 task>`, then `/factory run` again. Run Claude Code in auto mode or
+accept-edits mode so permission prompts do not stop the loop.
 
 ## Per-project policy: `.claude/factory.md`
 

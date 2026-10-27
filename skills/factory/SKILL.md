@@ -1,7 +1,7 @@
 ---
 name: factory
-description: "Software factory orchestrator. Plans a product brief into a backlog with an analyst, and runs each feature through spec-writer, builder, parallel reviewers (code, security, UX, UI) and approver subagents in its own git worktree, then merges or escalates to a human. Subcommands: init, plan <brief>, plan update <feedback>, <feature request>, next, backlog <item>, status, approve <id>, rework <id> <notes>, reject <id>, dashboard. Use only when the user invokes /factory or explicitly asks to run something through the software factory."
-argument-hint: "init | plan <brief> | plan update <feedback> | <feature request> | next | backlog <item> | status | approve <id> | rework <id> <notes> | reject <id> | dashboard"
+description: "Software factory orchestrator. Plans a product brief into a backlog with an analyst, and runs each feature through spec-writer, builder, parallel reviewers (code, security, UX, UI) and approver subagents in its own git worktree, then merges or escalates to a human. Subcommands: init, plan <brief>, plan update <feedback>, <feature request>, next, run [n], backlog <item>, status, approve <id>, rework <id> <notes>, reject <id>, dashboard. Use only when the user invokes /factory or explicitly asks to run something through the software factory."
+argument-hint: "init | plan <brief> | plan update <feedback> | <feature request> | next | run [n] | backlog <item> | status | approve <id> | rework <id> <notes> | reject <id> | dashboard"
 allowed-tools:
   - Read
   - Write
@@ -41,6 +41,7 @@ Paths you pass to subagents are always absolute:
 | `plan <brief>` | **Plan** |
 | `plan update <feedback>` | **Plan update** |
 | `next` | `F next`; if it returns an `id`, run **Pipeline** for it; if it returns `blocked`, list what each item waits on (items in progress elsewhere count as not done); if `blocked` is empty, say the backlog is empty |
+| `run [n]` | **Run** |
 | `backlog <item>` | `F backlog-add "<item>"` (gets an `M` id), confirm in one line |
 | `approve <id>` | **Approve** |
 | `rework <id> <notes>` | **Rework** |
@@ -103,6 +104,18 @@ After feedback on built features, or a change of scope. Append the user's text t
 - `merge_mode: pr`: `git -C WORKTREE push -u origin BRANCH`, then `gh pr create --repo <owner/repo of origin> --head BRANCH --base <base_branch> --title "<subject>" --body "<body, then one line per reviewer verdict>"`. `F set <id> stage=pr_open pr=<url>`, `F backlog-mark <id> x`. Keep the worktree until the PR is merged.
 
 Never push to `base_branch` directly and never force-push.
+
+## Run
+
+Works through the backlog on its own, so the user does not have to type `next` for every item. `n` caps the number of tasks started (default: no cap).
+
+1. Preflight once (Pipeline step 0). For `merge_mode: local`, `git -C REPO branch --show-current` must equal `base_branch`, otherwise every merge would stop at needs_human: tell the user and stop before starting anything.
+2. Loop: `F next`.
+   - It returns an `id` → run **Pipeline** for it, with a 1-line report instead of step 5's full report. A task that ends in `needs_human` does not stop the run: its item stays taken, items that depend on it wait, independent items go on.
+   - It returns `blocked` (or `n` tasks were started) → leave the loop.
+   - Stop early only if a task ends in `failed`, or a merge fails because of git (conflict, wrong branch): later merges would hit the same problem.
+   Do not ask the user anything during the loop.
+3. Final report: a table with item, title, outcome (merged / needs_human + first reason / failed), rounds; then what is still blocked and on what; then the commands for the tasks waiting for a human (`/factory approve <id>`, `/factory rework <id> <notes>`, `/factory reject <id>`). After approving them, `/factory run` again continues with the items they unblocked.
 
 ## Approve
 
