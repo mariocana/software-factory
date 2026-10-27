@@ -1,7 +1,7 @@
 ---
 name: factory
-description: "Software factory orchestrator. Plans a product brief into a backlog with an analyst, and runs each feature through spec-writer, builder, parallel reviewers (code, security, UX, UI) and approver subagents in its own git worktree, then merges or escalates to a human. Subcommands: init, plan <brief>, plan update <feedback>, <feature request>, next, run [n], backlog <item>, status, approve <id>, rework <id> <notes>, reject <id>, dashboard. Use only when the user invokes /factory or explicitly asks to run something through the software factory."
-argument-hint: "init | plan <brief> | plan update <feedback> | <feature request> | next | run [n] | backlog <item> | status | approve <id> | rework <id> <notes> | reject <id> | dashboard"
+description: "Software factory orchestrator. Plans a product brief into a backlog with an analyst, and runs each feature through spec-writer, builder, parallel reviewers (code, security, UX, UI) and approver subagents in its own git worktree, then merges or escalates to a human. Subcommands: init, plan <brief>, plan update <feedback>, <feature request>, next, run [n], resume <id>, backlog <item>, status, approve <id>, rework <id> <notes>, reject <id>, dashboard. Use only when the user invokes /factory or explicitly asks to run something through the software factory."
+argument-hint: "init | plan <brief> | plan update <feedback> | <feature request> | next | run [n] | resume <id> | backlog <item> | status | approve <id> | rework <id> <notes> | reject <id> | dashboard"
 allowed-tools:
   - Read
   - Write
@@ -42,6 +42,7 @@ Paths you pass to subagents are always absolute:
 | `plan update <feedback>` | **Plan update** |
 | `next` | `F next`; if it returns an `id`, run **Pipeline** for it; if it returns `blocked`, list what each item waits on (items in progress elsewhere count as not done); if `blocked` is empty, say the backlog is empty |
 | `run [n]` | **Run** |
+| `resume <id>` | **Resume** |
 | `backlog <item>` | `F backlog-add "<item>"` (gets an `M` id), confirm in one line |
 | `approve <id>` | **Approve** |
 | `rework <id> <notes>` | **Rework** |
@@ -115,7 +116,16 @@ Works through the backlog on its own, so the user does not have to type `next` f
    - It returns `blocked` (or `n` tasks were started) → leave the loop.
    - Stop early only if a task ends in `failed`, or a merge fails because of git (conflict, wrong branch): later merges would hit the same problem.
    Do not ask the user anything during the loop.
-3. Final report: a table with item, title, outcome (merged / needs_human + first reason / failed), rounds; then what is still blocked and on what; then the commands for the tasks waiting for a human (`/factory approve <id>`, `/factory rework <id> <notes>`, `/factory reject <id>`). After approving them, `/factory run` again continues with the items they unblocked.
+3. Final report: a table with item, title, outcome (merged / needs_human + first reason / failed), rounds; then what is still blocked and on what; tasks left in an active stage (`spec`, `build`, `review`, `approve`, `merge`) that this run did not start, with `/factory resume <id>` (a session stopped mid-task; `run` never takes them over, since another session may still be working on them); then the commands for the tasks waiting for a human (`/factory approve <id>`, `/factory rework <id> <notes>`, `/factory reject <id>`). After approving them, `/factory run` again continues with the items they unblocked.
+
+## Resume
+
+For a task whose session stopped mid-pipeline (closed, interrupted, out of context). Its backlog item stays taken, so `next` and `run` skip it. Only resume when no other session is working on it; if unsure, ask the user. Run Pipeline step 0, then continue from the stage in `F list`:
+- `spec` → step 1 (overwrite any partial spec.md), then step 2 unless `WORKTREE` already exists.
+- `build` / `review` → `WORKTREE` must exist (otherwise go back to step 1). With `round` from status: if build.md has no `## Round <round>` section or its last commit is missing on `BRANCH`, start step 3 at the builder for that round; otherwise start at the reviewers. Uncommitted changes in the worktree from the interrupted builder: let the builder see them, it decides whether to keep them.
+- `approve` → step 4. `merge` → **Merge** (first check with `git -C REPO branch --contains BRANCH` whether it already merged).
+- `needs_human`, `pr_open`, `merged`, `rejected`, `failed` → nothing to resume; name the command that applies.
+`F log <id> "resumed at <stage>"`, and report as Pipeline step 5.
 
 ## Approve
 

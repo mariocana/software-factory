@@ -36,6 +36,7 @@ Claude Code so the agents load.
 | `/factory add a copy button to code blocks` | runs a feature through the whole pipeline |
 | `/factory backlog <item>` / `/factory next` | queue an item by hand (`M` id); take the first open item whose deps are done |
 | `/factory run [n]` | builds the backlog on its own: takes the next ready item until nothing is ready (or `n` tasks), skipping past escalated tasks to independent items, then reports what merged and what waits for you |
+| `/factory resume <id>` | continue a task whose session stopped halfway, from the stage it reached |
 | `/factory status` | list tasks and why any wait for you |
 | `/factory approve <id>` | merge a task the approver escalated |
 | `/factory rework <id> <notes>` | one more build/review round with your notes |
