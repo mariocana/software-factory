@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 — 2026-10-29
+- Review profiles: `review_profile: auto` in the policy gives `risk: low` tasks only the code
+  reviewer and a rule check by the orchestrator instead of the approver. `full` (and existing
+  policies without the setting) keep the full review.
+- `factory.py light-check <id>`: diff size and sensitive paths (dependencies, database,
+  infrastructure, secrets, auth or payment code); any hit sends a light task back to full review.
+- The spec-writer's `risk: low` now has a definition.
+
 ## 0.4.1 — 2026-10-27
 - `/factory resume <id>`: continue a task whose session stopped mid-pipeline (closed, interrupted,
   out of context), from the stage it reached. `next` and `run` skip such tasks because their item

@@ -58,10 +58,20 @@ accept-edits mode so permission prompts do not stop the loop.
 ## Per-project policy: `.claude/factory.md`
 
 Frontmatter settings: `base_branch`, `merge_mode` (`local` merge into the base branch, or `pr`
-via `gh`), `auto_merge`, `max_rounds`, `max_auto_merge_lines`, `ui_review` (`auto|always|never`),
+via `gh`), `auto_merge`, `review_profile` (see below), `max_rounds`, `max_auto_merge_lines`, `ui_review` (`auto|always|never`),
 and the `setup/test/lint/run` commands. The body lists what always goes to a human (auth, billing,
 migrations, new dependencies...) and project notes. Every agent reads it, together with the
 project's `CLAUDE.md`.
+
+## Review profiles
+
+Not every task needs four reviewers. With `review_profile: auto` (the template's default), a task
+whose spec says `risk: low` (copy, styling, static pages, isolated UI) gets only the code reviewer,
+and the orchestrator checks the merge rules itself instead of dispatching the approver: 3 subagents
+instead of 6-7. Before merging it runs `factory.py light-check`, which looks at the real diff: if it
+touches dependencies, database, infrastructure, secrets, auth or payment code, or exceeds
+`max_auto_merge_lines`, the task goes back to the full review. `review_profile: full`, or no
+setting at all, keeps every reviewer on every task.
 
 ## Optional skills
 
@@ -113,5 +123,5 @@ CHANGELOG.md
   reason, so the human queue stays short.
 - **Merge never touches your uncommitted work**: no stash, no reset, no branch switch. If git
   cannot merge cleanly the task waits for you.
-- **Cost:** every task runs 4-7 subagents. Opus is used for spec, builder, security and approver;
+- **Cost:** every task runs 4-7 subagents (3 for a light task). Opus is used for spec, builder, security and approver;
   Sonnet for code/UX/UI review. Change `model:` in `agents/*.md` to trade cost for quality.

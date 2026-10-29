@@ -82,13 +82,19 @@ After feedback on built features, or a change of scope. Append the user's text t
 
 **2. Worktree.** Base ref: `<base_branch>` for `merge_mode: local`; for `pr` run `git -C REPO fetch origin <base_branch>` and use `origin/<base_branch>`. Then `git -C REPO worktree add WORKTREE -b BRANCH <base ref>`. Save it: `F set <id> base=<base ref>`.
 
+**Profile.** The task is **light** when the policy has `review_profile: auto` and spec.md has `risk: low`; otherwise **full** (a missing `review_profile` means full). `F set <id> profile=<light|full>`. Light changes only step 3's reviewer list and step 4; everything else is the same.
+
 **3. Build/review loop**, `round` from 1 to `max_rounds`:
 - `F set <id> stage=build round=<round>`. Dispatch `software-factory:builder` with `WORKTREE`, `BRANCH`, `TASK_DIR`, `POLICY`, `ROUND`, the task id, and on round 2+ the list of previous review files. `F log <id> "build r<round>: <its one-line reply>"`.
-- `F set <id> stage=review`. Reviewer kinds: `code` and `security` always; `ux` and `ui` when `ui_review` is `always`, or `auto` and the spec has `touches_ui: true`. Dispatch all of them **in a single message** so they run in parallel, each with `KIND`, `CONTRACT`, `REPO`, `WORKTREE`, `BRANCH`, `BASE` (the base ref), `TASK_DIR`, `POLICY`, `ROUND`. Wait for every one.
+- `F set <id> stage=review`. Reviewer kinds: light → `code` only. Full → `code` and `security` always; `ux` and `ui` when `ui_review` is `always`, or `auto` and the spec has `touches_ui: true`. Dispatch all of them **in a single message** so they run in parallel, each with `KIND`, `CONTRACT`, `REPO`, `WORKTREE`, `BRANCH`, `BASE` (the base ref), `TASK_DIR`, `POLICY`, `ROUND`. Wait for every one.
 - For each: read the `verdict` of `review-<kind>-r<round>.md`, `F set <id> review_<kind>=<verdict>`, and log the reply line.
 - If every verdict is `pass` and build.md's last round is `Status: green`, leave the loop. Otherwise continue with the next round; after `max_rounds`, leave the loop anyway: the approver will escalate.
 
-**4. Approve.** `F set <id> stage=approve`. Dispatch `software-factory:approver` with `REPO`, `WORKTREE`, `BRANCH`, `BASE`, `TASK_DIR`, `POLICY`, `ROUND`, `MAX_ROUNDS`. Read `decision.md`, `F set <id> decision=<merge|escalate>`.
+**Light check** (light tasks only, after the loop): `F light-check <id>`. It reports the diff size and any sensitive paths (dependencies, database, infrastructure, secrets, auth or payment code). If `light` is `false`, the task becomes full: `F set <id> profile=full`, log the reason, dispatch the missing full reviewers for the current round in parallel, and continue step 3's exit rule (another round if a reviewer asks for changes and rounds remain); then the normal step 4.
+
+**4. Approve, light.** Do not dispatch the approver. Merge only if all hold: `auto_merge` is `true`, build.md's last round is `Status: green`, the code review of the last round is `pass`, `F light-check` said `light: true`. Write `TASK_DIR/decision.md` yourself in the approver's format: `decision: merge` or `escalate`, a "Reasons" line per check (failed checks for escalate), and for merge a "Merge message" whose first line is `factory(<id>): <spec title>` and body is the spec Summary. `F set <id> decision=<…>`, then continue as below.
+
+**4. Approve, full.** `F set <id> stage=approve`. Dispatch `software-factory:approver` with `REPO`, `WORKTREE`, `BRANCH`, `BASE`, `TASK_DIR`, `POLICY`, `ROUND`, `MAX_ROUNDS`. Read `decision.md`, `F set <id> decision=<merge|escalate>`.
 - `merge` → **Merge**.
 - `escalate` → `F set <id> stage=needs_human`, log the main reason, and tell the user the reasons from decision.md's "For the human" section and the commands `/factory approve <id>`, `/factory rework <id> <notes>`, `/factory reject <id>`.
 

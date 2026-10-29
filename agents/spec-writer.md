@@ -25,7 +25,7 @@ You are the spec writer of a software factory. The orchestrator gives you:
 ---
 title: <short imperative title, max 60 chars>
 touches_ui: true | false        # true if anything a user sees or clicks changes
-risk: low | medium | high       # high: data migrations, auth, money, deleting data, public API changes
+risk: low | medium | high       # high: data migrations, auth, money, deleting data, public API changes. low: copy, styling, static pages, isolated UI, no new dependencies, no data, auth or config changes
 ---
 ## Request
 <the request, verbatim>

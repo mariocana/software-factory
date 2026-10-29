@@ -366,6 +366,42 @@ load();setInterval(load,3000);
 </script></body></html>"""
 
 
+# Paths that send a light-profile task back to the full review: dependencies, schema,
+# infrastructure, secrets, and code whose path names a sensitive area.
+SENSITIVE = [
+    (r"(^|/)(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|requirements[^/]*\.txt"
+     r"|pyproject\.toml|poetry\.lock|uv\.lock|Pipfile(\.lock)?|Cargo\.(toml|lock)|go\.(mod|sum)|Gemfile(\.lock)?"
+     r"|composer\.(json|lock)|pubspec\.(yaml|lock)|Podfile(\.lock)?)$", "dependencies"),
+    (r"(^|/)(migrations?|supabase|prisma|schema)(/|\.)|\.sql$", "database"),
+    (r"(^|/)(\.github|\.gitlab-ci\.yml|\.circleci|Dockerfile|docker-compose[^/]*|terraform|infra|deploy)"
+     r"|(^|/)(wrangler\.toml|vercel\.json|netlify\.toml|_headers|_redirects|app\.json|eas\.json)$", "infrastructure"),
+    (r"(^|/)\.env|secret|credential|\.pem$|\.key$", "secrets"),
+    (r"auth|login|logout|session|password|token|permission|role|admin|payment|billing|checkout"
+     r"|subscription|stripe|delete-?account", "sensitive code"),
+]
+
+
+def cmd_light_check(args):
+    """Diff size and sensitive paths of a task branch, to keep or leave the light review."""
+    front, _ = read_front(task_dir(args.id) / "status.md")
+    policy, _ = read_front(repo_root() / ".claude" / "factory.md")
+    base, branch = front.get("base") or policy.get("base_branch", "main"), front["branch"]
+    out = subprocess.run(["git", "-C", str(repo_root()), "diff", "--numstat", f"{base}...{branch}"],
+                         check=True, capture_output=True, text=True).stdout
+    lines, files, sensitive = 0, 0, []
+    for row in out.splitlines():
+        added, removed, path = row.split("\t", 2)
+        files += 1
+        lines += (int(added) if added.isdigit() else 0) + (int(removed) if removed.isdigit() else 0)
+        for pattern, reason in SENSITIVE:
+            if re.search(pattern, path, re.I):
+                sensitive.append(f"{path}: {reason}")
+                break
+    limit = int(policy.get("max_auto_merge_lines") or 400)
+    print(json.dumps({"light": not sensitive and lines <= limit, "lines": lines, "limit": limit,
+                      "files": files, "sensitive": sensitive}))
+
+
 def cmd_dashboard(args):
     root = repo_root()
     tasks_dir = root / ".factory" / "tasks"
@@ -423,6 +459,7 @@ def main():
     sub.add_parser("next").set_defaults(fn=cmd_next)
     s = sub.add_parser("backlog-mark"); s.add_argument("id"); s.add_argument("mark", choices=["x", "-"]); s.set_defaults(fn=cmd_backlog_mark)
     sub.add_parser("plan-apply").set_defaults(fn=cmd_plan_apply)
+    s = sub.add_parser("light-check"); s.add_argument("id"); s.set_defaults(fn=cmd_light_check)
     s = sub.add_parser("dashboard"); s.add_argument("--port", type=int, default=8765); s.set_defaults(fn=cmd_dashboard)
     args = p.parse_args()
     args.fn(args)
