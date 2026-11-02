@@ -78,14 +78,21 @@ After feedback on built features, or a change of scope. Append the user's text t
 
 **0. Preflight.** If `F policy` fails, run **Init** first. Read the settings once and run `F skills`; if it reports `missing`, tell the user once which listed skills are not installed in this project (install with `claude plugin install <name>@<name> --scope project`) and continue without them. Check `git -C REPO rev-parse --verify <base_branch>`. The main checkout does not need to be clean: all work happens in the worktree.
 
+**Build only** (`review_profile: none`, for MVPs and static sites where tokens matter more than review). Only the builder runs: no spec-writer, no reviewers, no approver.
+1. `F set <id> stage=spec profile=none`. Write `TASK_DIR/spec.md` yourself: frontmatter `title` (the card's title, or a short imperative one from the request, max 60 chars), `touches_ui` (the card's value, else `true`), `risk` (the card's value, else `low`), `profile: none`; body `## Request` with `request.md` verbatim. `F set <id> title="<title>" touches_ui=<…> risk=<…>`.
+2. Step 2 (worktree) as below.
+3. One builder round: step 3's first bullet with `ROUND=1`, and no reviewers.
+4. Rule check: `F light-check <id>`. Merge only if all hold: `auto_merge` is `true`, build.md says `Status: green`, `risk` is not `high`, and `light-check` said `light: true` (no dependencies, database, infrastructure, secrets, auth or payment paths, diff within `max_auto_merge_lines`). Write `decision.md` as in **4. Approve, light**, but the merge message body comes from build.md's Changes. Anything failing → `needs_human` with the failed checks as reasons; no reviewer is started. Then **Merge** or the escalate branch of step 4, and step 5.
+`/factory rework <id>` on such a task runs one more builder round and this rule check again.
+
 **1. Spec.** `F set <id> stage=spec`. Dispatch `software-factory:spec-writer` with `REPO`, `TASK_DIR`, `POLICY` and `REQUEST` (the content of `TASK_DIR/request.md`; for a planned item it is the analyst's item card, and `docs/product.md` is context). Afterwards read `spec.md` frontmatter: `F set <id> title="<title>" touches_ui=<…> risk=<…>`, `F log <id> "spec written"`.
 
 **2. Worktree.** Base ref: `<base_branch>` for `merge_mode: local`; for `pr` run `git -C REPO fetch origin <base_branch>` and use `origin/<base_branch>`. Then `git -C REPO worktree add WORKTREE -b BRANCH <base ref>`. Save it: `F set <id> base=<base ref>`.
 
-**Profile.** The task is **light** when the policy has `review_profile: auto` and spec.md has `risk: low`; otherwise **full** (a missing `review_profile` means full). `F set <id> profile=<light|full>`. Light changes only step 3's reviewer list and step 4; everything else is the same.
+**Profile.** (`review_profile: none` never gets here: see **Build only**.) The task is **light** when the policy has `review_profile: auto` and spec.md has `risk: low`; otherwise **full** (a missing `review_profile` means full). `F set <id> profile=<light|full>`. Light changes only step 3's reviewer list and step 4; everything else is the same.
 
 **3. Build/review loop**, `round` from 1 to `max_rounds`:
-- `F set <id> stage=build round=<round>`. Dispatch `software-factory:builder` with `WORKTREE`, `BRANCH`, `TASK_DIR`, `POLICY`, `ROUND`, the task id, and on round 2+ the list of previous review files. `F log <id> "build r<round>: <its one-line reply>"`.
+- `F set <id> stage=build round=<round>`. Dispatch `software-factory:builder` (with `model` set to the policy's `builder_model` when it is not empty) with `WORKTREE`, `BRANCH`, `TASK_DIR`, `POLICY`, `ROUND`, the task id, and on round 2+ the list of previous review files. `F log <id> "build r<round>: <its one-line reply>"`.
 - `F set <id> stage=review`. Reviewer kinds: light → `code` only. Full → `code` and `security` always; `ux` and `ui` when `ui_review` is `always`, or `auto` and the spec has `touches_ui: true`. Dispatch all of them **in a single message** so they run in parallel, each with `KIND`, `CONTRACT`, `REPO`, `WORKTREE`, `BRANCH`, `BASE` (the base ref), `TASK_DIR`, `POLICY`, `ROUND`. Wait for every one.
 - For each: read the `verdict` of `review-<kind>-r<round>.md`, `F set <id> review_<kind>=<verdict>`, and log the reply line.
 - If every verdict is `pass` and build.md's last round is `Status: green`, leave the loop. Otherwise continue with the next round; after `max_rounds`, leave the loop anyway: the approver will escalate.
@@ -139,7 +146,7 @@ Only for a task in `needs_human` (check `F list`). The human's command is the ap
 
 ## Rework
 
-Task must be in `needs_human` with its worktree present. Write the user's notes to `TASK_DIR/human-notes.md` (append, with a date heading). Then run one more round of step 3 with `round` = current round + 1 (one round, regardless of `max_rounds`), then step 4.
+Task must be in `needs_human` with its worktree present. Write the user's notes to `TASK_DIR/human-notes.md` (append, with a date heading). For a `profile: none` task, run one builder round and the **Build only** rule check. Otherwise run one more round of step 3 with `round` = current round + 1 (one round, regardless of `max_rounds`), then step 4.
 
 ## Reject
 

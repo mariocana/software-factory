@@ -58,7 +58,7 @@ accept-edits mode so permission prompts do not stop the loop.
 ## Per-project policy: `.claude/factory.md`
 
 Frontmatter settings: `base_branch`, `merge_mode` (`local` merge into the base branch, or `pr`
-via `gh`), `auto_merge`, `review_profile` (see below), `max_rounds`, `max_auto_merge_lines`, `ui_review` (`auto|always|never`),
+via `gh`), `auto_merge`, `review_profile` and `builder_model` (see below), `max_rounds`, `max_auto_merge_lines`, `ui_review` (`auto|always|never`),
 and the `setup/test/lint/run` commands. The body lists what always goes to a human (auth, billing,
 migrations, new dependencies...) and project notes. Every agent reads it, together with the
 project's `CLAUDE.md`.
@@ -72,6 +72,12 @@ instead of 6-7. Before merging it runs `factory.py light-check`, which looks at 
 touches dependencies, database, infrastructure, secrets, auth or payment code, or exceeds
 `max_auto_merge_lines`, the task goes back to the full review. `review_profile: full`, or no
 setting at all, keeps every reviewer on every task.
+
+`review_profile: none` is for MVPs and static sites where review costs more than it saves: only the
+builder runs (1 subagent per task), and the orchestrator merges when the build is green and
+`light-check` finds nothing sensitive; anything else waits for you. Pair it with
+`builder_model: sonnet` to make each task cheaper still. The orchestrator itself runs on your
+session's model: a Sonnet session costs less than an Opus one.
 
 ## Optional skills
 
@@ -123,5 +129,5 @@ CHANGELOG.md
   reason, so the human queue stays short.
 - **Merge never touches your uncommitted work**: no stash, no reset, no branch switch. If git
   cannot merge cleanly the task waits for you.
-- **Cost:** every task runs 4-7 subagents (3 for a light task). Opus is used for spec, builder, security and approver;
+- **Cost:** every task runs 4-7 subagents (3 for a light task, 1 with `review_profile: none`). Opus is used for spec, builder, security and approver;
   Sonnet for code/UX/UI review. Change `model:` in `agents/*.md` to trade cost for quality.

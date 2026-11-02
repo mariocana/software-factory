@@ -5,7 +5,8 @@ auto_merge: true             # false: every task stops at needs_human
 max_rounds: 2                # build+review rounds before the approver decides
 max_auto_merge_lines: 400    # bigger diffs always go to a human
 skills:                      # optional: impeccable, ponytail (install them in the project first)
-review_profile: auto         # auto: risk-low tasks get only the code reviewer and a rule check instead of the approver | full: every task gets every reviewer
+review_profile: auto         # auto: risk-low tasks get only the code reviewer and a rule check | full: every reviewer on every task | none: builder only, then a rule check (MVPs, static sites)
+builder_model:               # empty: the builder's default (opus) | sonnet: cheaper, fine for simple sites
 ui_review: auto              # auto: only when spec says touches_ui | always | never
 setup_command:               # e.g. npm ci  (run by the builder in a fresh worktree)
 test_command:                # e.g. npm test

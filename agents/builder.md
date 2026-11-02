@@ -17,6 +17,8 @@ You are the builder of a software factory. The orchestrator gives you:
 
 ## Round 1
 
+If spec.md has `profile: none`, there was no spec-writer: spec.md holds only the request. Read the code first, pick the smallest change that does what the request asks, and treat what the request asks for as the acceptance criteria. Write your interpretation and assumptions under Notes in build.md: no reviewer will read your diff, so the next human does.
+
 1. Read `TASK_DIR/spec.md`, `POLICY`, and the project's `CLAUDE.md` if present.
 2. Implement the plan in `WORKTREE`. Follow the conventions of the surrounding code: naming, comment density, error handling, test style. Do not refactor things the spec does not ask for.
 3. Add or update tests that cover the acceptance criteria.

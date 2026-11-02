@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 — 2026-11-02
+- `review_profile: none`: builder only, for MVPs and static sites. No spec-writer, reviewers or
+  approver; the orchestrator merges when the build is green, risk is not high and `light-check`
+  finds nothing sensitive, otherwise the task waits for a human.
+- `builder_model` in the policy: run the builder on another model (e.g. `sonnet`).
+
 ## 0.5.0 — 2026-10-29
 - Review profiles: `review_profile: auto` in the policy gives `risk: low` tasks only the code
   reviewer and a rule check by the orchestrator instead of the approver. `full` (and existing
